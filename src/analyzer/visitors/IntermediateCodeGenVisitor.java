@@ -46,6 +46,8 @@ public class IntermediateCodeGenVisitor implements ParserVisitor {
     public Object visit(ASTProgram node, Object data) {
         node.childrenAccept(this, data);
         // TODO
+        String endLabel = newLabel();
+        m_writer.println(endLabel);
         return null;
     }
 
@@ -53,6 +55,17 @@ public class IntermediateCodeGenVisitor implements ParserVisitor {
     public Object visit(ASTBlock node, Object data) {
         node.childrenAccept(this, data);
         // TODO
+        String nextChildData = (String) data;
+        int nChildren = node.jjtGetNumChildren();
+
+        for (int i = 0; i < nChildren; i++) {
+            String nextChild = (i == nChildren - 1) ? nextChildData : newLabel();
+            node.jjtGetChild(i).jjtAccept(this, nextChild);
+
+            if (i < nChildren - 1) {
+                m_writer.println(nextChild);
+            }
+        }
         return null;
     }
 
@@ -80,8 +93,22 @@ public class IntermediateCodeGenVisitor implements ParserVisitor {
     @Override
     public Object visit(ASTDeclareStmt node, Object data) {
         String identifier = ((ASTIdentifier) node.jjtGetChild(0)).getValue();
-        SymbolTable.put(identifier, node.getValue().equals("bool") ? VarType.BOOL : VarType.INT);
+        VarType vartype = node.getValue().equals("bool") ? VarType.BOOL : VarType.INT;
+        SymbolTable.put(identifier, vartype);
         // TODO
+        boolean hasInit = node.jjtGetNumChildren() > 1;
+        if (!hasInit) {
+            m_writer.println(identifier + " = 0");
+            return null;
+        }
+
+        if (vartype == VarType.INT) {
+            String value = (String) node.jjtGetChild(1).jjtAccept(this, data);
+            m_writer.println(identifier + " = " + value);
+        }
+
+        //else for the bool
+        
         return null;
     }
 
@@ -147,21 +174,29 @@ public class IntermediateCodeGenVisitor implements ParserVisitor {
 
     @Override
     public Object visit(ASTNotExpr node, Object data) {
-        node.jjtGetChild(0).jjtAccept(this, data);
         // TODO
+        BoolLabel boolLabel = (BoolLabel) data;
+        node.jjtGetChild(0).jjtAccept(this, boolLabel.swapped());
         return null;
     }
 
     @Override
     public Object visit(ASTGenValue node, Object data) {
-        node.jjtGetChild(0).jjtAccept(this, data);
         // TODO
-        return null;
+        return node.jjtGetChild(0).jjtAccept(this, data);
     }
 
     @Override
     public Object visit(ASTBoolValue node, Object data) {
         // TODO
+        BoolLabel boolLabel = (BoolLabel) data;
+
+        if (node.getValue()) {
+            m_writer.println("goto" + boolLabel.lTrue);
+        } else {
+            m_writer.println("goto" + boolLabel.lFalse);
+        }
+
         return null;
     }
 
